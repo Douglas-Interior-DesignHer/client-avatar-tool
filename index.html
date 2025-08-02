@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Client Avatar Discovery Tool - Interior Design Her</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    
+    <!-- Google Analytics -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=GA_MEASUREMENT_ID"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'GA_MEASUREMENT_ID');
+    </script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            width: 90%;
+            max-width: 800px;
+            min-height: 600px;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .header {
+            background: #2c3e50;
+            color: white;
+            padding: 20px;
+            border-radius: 20px 20px 0 0;
+            text-align: center;
+        }
+        
+        .chat-container {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            max-height: 400px;
+        }
+        
+        .message {
+            margin-bottom: 15px;
+            padding: 12px 16px;
+            border-radius: 12px;
+            max-width: 80%;
+        }
+        
+        .message.assistant {
+            background: #e3f2fd;
+            margin-left: auto;
+            text-align: right;
+        }
+        
+        .message.user {
+            background: #f5f5f5;
+            margin-right: auto;
+        }
+        
+        .input-area {
+            padding: 20px;
+            border-top: 1px solid #eee;
+            display: flex;
+            gap: 10px;
+        }
+        
+        #messageInput {
+            flex: 1;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 16px;
+        }
+        
+        #sendButton {
+            padding: 12px 24px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        
+        #sendButton:hover {
+            background: #5a6fd8;
+        }
+        
+        #sendButton:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 10px;
+            font-style: italic;
+            color: #666;
+        }
+        
+        .error {
+            background: #ffebee;
+            color: #c62828;
+            padding: 12px;
+            border-radius: 8px;
+            margin: 10px 0;
+        }
+        
+        .phase-indicator {
+            background: #667eea;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+        
+        .payment-required {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            color: #856404;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+            margin: 20px;
+        }
+        
+        .payment-button {
+            background: #28a745;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            margin-top: 10px;
+            text-decoration: none;
+            display: inline-block;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Client Avatar Discovery Tool</h1>
+            <p>Discover your ideal interior design client in 6 strategic phases</p>
+        </div>
+        
+        <div class="chat-container" id="chatContainer">
+            <div id="phaseIndicator" class="phase-indicator">Phase 1: Business Foundation</div>
+            <div class="message assistant">
+                <strong>Welcome!</strong> I'm here to help you discover your ideal client avatar through our proven 6-phase process. This will help you attract more profitable clients and grow your interior design business.
+                <br><br>
+                <strong>Phase 1: Business Foundation</strong>
+                <br>
+                Let's start by understanding your current business situation. Can you tell me about your interior design business - are you just starting out, established, or somewhere in between?
+            </div>
+        </div>
+        
+        <div class="loading" id="loading">Thinking...</div>
+        
+        <div class="input-area">
+            <input type="text" id="messageInput" placeholder="Type your response here..." />
+            <button id="sendButton">Send</button>
+        </div>
+    </div>
+
+    <script>
+        // Configuration
+        const CLAUDE_API_KEY = 'your-claude-api-key-here'; // Replace with actual key
+        const CLAUDE_API_URL = 'https://api.anthropic.com/v1/messages';
+
+        // DOM elements
+        const chatContainer = document.getElementById('chatContainer');
+        const messageInput = document.getElementById('messageInput');
+        const sendButton = document.getElementById('sendButton');
+        const loading = document.getElementById('loading');
+
+        // Application state
+        let currentPhase = 1;
+        let conversationHistory = [];
+        let hasAccess = false;
+        let messageCount = 0;
+
+        // Phase definitions
+        const phases = {
+            1: {
+                title: "Business Foundation",
+                prompt: "You are helping an interior designer discover their ideal client avatar. This is Phase 1: Business Foundation. Ask questions about their current business situation, experience level, services offered, and business goals. Keep responses conversational and engaging."
+            },
+            2: {
+                title: "Profitable Project Analysis", 
+                prompt: "This is Phase 2: Profitable Project Analysis. Focus on understanding which types of projects and clients have been most profitable and enjoyable for them. Ask about project scope, budgets, timelines, and client characteristics of their best projects."
+            },
+            3: {
+                title: "Market Intelligence",
+                prompt: "This is Phase 3: Market Intelligence. Explore their target market, geographic focus, competition, and market positioning. Ask about their ideal location, demographic, and how they differentiate from competitors."
+            },
+            4: {
+                title: "Financial Profile",
+                prompt: "This is Phase 4: Financial Profile. Understand their ideal client's budget range, payment behavior, and financial comfort level. Ask about pricing strategies and how they qualify clients financially."
+            },
+            5: {
+                title: "Communication & Management",
+                prompt: "This is Phase 5: Communication & Management. Focus on client communication preferences, involvement levels, decision-making processes, and project management styles that work best."
+            },
+            6: {
+                title: "Business Development Strategy",
+                prompt: "This is Phase 6: Business Development Strategy. Explore how their ideal clients find them, referral sources, marketing channels, and conversion factors. This is the final phase."
+            }
+        };
+
+        function addMessage(content, isUser = false) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${isUser ? 'user' : 'assistant'}`;
+            messageDiv.innerHTML = content;
+            chatContainer.appendChild(messageDiv);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        function showLoading(show) {
+            loading.style.display = show ? 'block' : 'none';
+            sendButton.disabled = show;
+        }
+
+        function showError(message) {
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'error';
+            errorDiv.textContent = `Error: ${message}`;
+            chatContainer.appendChild(errorDiv);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        async function callClaudeAPI(message) {
+            try {
+                const systemPrompt = phases[currentPhase].prompt;
+                
+                const response = await fetch(CLAUDE_API_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-api-key': CLAUDE_API_KEY,
+                        'anthropic-version': '2023-06-01'
+                    },
+                    body: JSON.stringify({
+                        model: 'claude-3-sonnet-20240229',
+                        max_tokens: 1000,
+                        system: systemPrompt,
+                        messages: [
+                            ...conversationHistory,
+                            { role: 'user', content: message }
+                        ]
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`API request failed: ${response.status}`);
+                }
+
+                const data = await response.json();
+                return data.content[0].text;
+            } catch (error) {
+                console.error('Claude API Error:', error);
+                throw error;
+            }
+        }
+
+        async function sendMessage() {
+            const message = messageInput.value.trim();
+            if (!message) return;
+
+            // Add user message
+            addMessage(message, true);
+            conversationHistory.push({role: 'user', content: message});
+            
+            messageInput.value = '';
+            showLoading(true);
+
+            try {
+                // Call Claude API
+                const response = await callClaudeAPI(message);
+                addMessage(response);
+                conversationHistory.push({role: 'assistant', content: response});
+                
+                // Save to localStorage
+                localStorage.setItem('avatarDiscovery', JSON.stringify({
+                    phase: currentPhase,
+                    history: conversationHistory
+                }));
+                
+            } catch (error) {
+                showError('Failed to get response. Please check your API key and try again.');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        // Event listeners
+        sendButton.addEventListener('click', sendMessage);
+        messageInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        });
+
+        // Load saved conversation
+        function loadSavedConversation() {
+            const saved = localStorage.getItem('avatarDiscovery');
+            if (saved) {
+                const data = JSON.parse(saved);
+                currentPhase = data.phase;
+                conversationHistory = data.history;
+                
+                // Restore chat
+                chatContainer.innerHTML = '';
+                data.history.forEach(msg => {
+                    addMessage(msg.content, msg.role === 'user');
+                });
+            }
+        }
+
+        // Check payment access
+        function checkAccess() {
+            const urlParams = new URLSearchParams(window.location.search);
+            hasAccess = urlParams.get('access') === 'paid';
+            return hasAccess;
+        }
+
+        function showPaymentRequired() {
+            const paymentDiv = document.createElement('div');
+            paymentDiv.className = 'payment-required';
+            paymentDiv.innerHTML = `
+                <h3>💳 Payment Required</h3>
+                <p>To continue your Client Avatar Discovery journey and access all 6 phases, please complete your payment.</p>
+                <a href="https://interiordesignher.gumroad.com/l/client-avatar-discovery" class="payment-button" target="_blank">
+                    Pay $9 to Continue
+                </a>
+                <p><small>After payment, you'll receive access instructions.</small></p>
+            `;
+            chatContainer.appendChild(paymentDiv);
+        }
+
+        function updatePhaseIndicator() {
+            const indicator = document.getElementById('phaseIndicator');
+            if (indicator) {
+                indicator.textContent = `Phase ${currentPhase}: ${phases[currentPhase].title}`;
+            }
+        }
+
+        function advancePhase() {
+            if (currentPhase < 6) {
+                currentPhase++;
+                updatePhaseIndicator();
+                
+                // Add phase transition message
+                addMessage(`<strong>🎉 Phase ${currentPhase - 1} Complete!</strong><br><br>Great progress! Now let's move to <strong>Phase ${currentPhase}: ${phases[currentPhase].title}</strong>`);
+                
+                // Save progress
+                localStorage.setItem('avatarDiscovery', JSON.stringify({
+                    phase: currentPhase,
+                    history: conversationHistory,
+                    messageCount: messageCount
+                }));
+                
+                return true;
+            }
+            return false;
+        }
+
+        // Enhanced send message with access control
+        async function sendMessage() {
+            const message = messageInput.value.trim();
+            if (!message) return;
+
+            // Check access for messages beyond the first few
+            messageCount++;
+            if (messageCount > 3 && !hasAccess) {
+                showPaymentRequired();
+                return;
+            }
+
+            // Add user message
+            addMessage(message, true);
+            conversationHistory.push({role: 'user', content: message});
+            
+            messageInput.value = '';
+            showLoading(true);
+
+            try {
+                // Enhanced prompt with phase completion detection
+                const enhancedPrompt = phases[currentPhase].prompt + 
+                    " After 3-4 meaningful exchanges in this phase, if you feel you have enough information about this topic, end your response with [PHASE_COMPLETE] to advance to the next phase.";
+                
+                const response = await fetch(CLAUDE_API_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-api-key': CLAUDE_API_KEY,
+                        'anthropic-version': '2023-06-01'
+                    },
+                    body: JSON.stringify({
+                        model: 'claude-3-sonnet-20240229',
+                        max_tokens: 1000,
+                        system: enhancedPrompt,
+                        messages: [
+                            ...conversationHistory,
+                            { role: 'user', content: message }
+                        ]
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`API request failed: ${response.status}`);
+                }
+
+                const data = await response.json();
+                let responseText = data.content[0].text;
+                
+                // Check for phase completion
+                if (responseText.includes('[PHASE_COMPLETE]')) {
+                    responseText = responseText.replace('[PHASE_COMPLETE]', '');
+                    addMessage(responseText);
+                    conversationHistory.push({role: 'assistant', content: responseText});
+                    
+                    // Advance to next phase
+                    setTimeout(() => {
+                        const advanced = advancePhase();
+                        if (!advanced) {
+                            // All phases complete - show completion
+                            addMessage(`<strong>🎊 Congratulations!</strong><br><br>You've completed all 6 phases of the Client Avatar Discovery process! Your ideal client profile is now ready.<br><br><button onclick="generatePDF()" style="background: #667eea; color: white; padding: 12px 24px; border: none; border-radius: 8px; cursor: pointer; font-size: 16px;">📄 Generate Your PDF Report</button>`);
+                        }
+                    }, 1000);
+                } else {
+                    addMessage(responseText);
+                    conversationHistory.push({role: 'assistant', content: responseText});
+                }
+                
+                // Save to localStorage
+                localStorage.setItem('avatarDiscovery', JSON.stringify({
+                    phase: currentPhase,
+                    history: conversationHistory,
+                    messageCount: messageCount
+                }));
+                
+            } catch (error) {
+                showError('Failed to get response. Please check your API key and try again.');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        // Load saved conversation
+        function loadSavedConversation() {
+            const saved = localStorage.getItem('avatarDiscovery');
+            if (saved) {
+                const data = JSON.parse(saved);
+                currentPhase = data.phase || 1;
+                conversationHistory = data.history || [];
+                messageCount = data.messageCount || 0;
+                
+                updatePhaseIndicator();
+                
+                // Restore chat (skip the default welcome message)
+                const chatContainer = document.getElementById('chatContainer');
+                chatContainer.innerHTML = '<div id="phaseIndicator" class="phase-indicator">Phase 1: Business Foundation</div>';
+                updatePhaseIndicator();
+                
+                data.history.forEach(msg => {
+                    addMessage(msg.content, msg.role === 'user');
+                });
+            }
+        }
+
+        // Initialize
+        checkAccess();
+        loadSavedConversation();
+        console.log('Client Avatar Discovery Tool with Claude API loaded!');
+        console.log('Access level:', hasAccess ? 'PAID' : 'FREE');
+        
+        // PDF Generation
+        function generatePDF() {
+            if (!window.jsPDF) {
+                showError('PDF library not loaded. Please refresh the page.');
+                return;
+            }
+
+            const { jsPDF } = window.jsPDF;
+            const doc = new jsPDF();
+            
+            // Header
+            doc.setFontSize(24);
+            doc.setFont('helvetica', 'bold');
+            doc.text('Client Avatar Discovery Report', 20, 30);
+            
+            doc.setFontSize(16);
+            doc.setFont('helvetica', 'normal');
+            doc.text('Interior Design Her - Professional Client Profile', 20, 45);
+            
+            doc.setFontSize(12);
+            doc.text(`Generated: ${new Date().toLocaleDateString()}`, 20, 60);
+            
+            // Extract insights from conversation
+            let yPosition = 80;
+            const maxWidth = 170;
+            
+            // Add phase summaries
+            for (let phase = 1; phase <= 6; phase++) {
+                if (yPosition > 250) {
+                    doc.addPage();
+                    yPosition = 20;
+                }
+                
+                doc.setFontSize(16);
+                doc.setFont('helvetica', 'bold');
+                doc.text(`Phase ${phase}: ${phases[phase].title}`, 20, yPosition);
+                yPosition += 10;
+                
+                doc.setFontSize(12);
+                doc.setFont('helvetica', 'normal');
+                
+                // Extract relevant messages from this phase
+                const phaseMessages = conversationHistory.filter((msg, index) => {
+                    // Simple heuristic: distribute messages across phases
+                    const messagesPerPhase = Math.ceil(conversationHistory.length / 6);
+                    const phaseStart = (phase - 1) * messagesPerPhase;
+                    const phaseEnd = phase * messagesPerPhase;
+                    return index >= phaseStart && index < phaseEnd && msg.role === 'user';
+                });
+                
+                if (phaseMessages.length > 0) {
+                    const summary = phaseMessages.map(msg => msg.content).join(' ');
+                    const lines = doc.splitTextToSize(summary.substring(0, 300) + '...', maxWidth);
+                    doc.text(lines, 20, yPosition);
+                    yPosition += lines.length * 5 + 10;
+                }
+            }
+            
+            // Add recommendations section
+            if (yPosition > 200) {
+                doc.addPage();
+                yPosition = 20;
+            }
+            
+            doc.setFontSize(18);
+            doc.setFont('helvetica', 'bold');
+            doc.text('Key Recommendations', 20, yPosition);
+            yPosition += 15;
+            
+            doc.setFontSize(12);
+            doc.setFont('helvetica', 'normal');
+            const recommendations = [
+                '• Focus marketing efforts on the client characteristics identified in this discovery process',
+                '• Use the communication preferences identified to structure your client onboarding',
+                '• Align your pricing strategy with the budget insights from the financial profile phase',
+                '• Leverage the business development insights to optimize your lead generation',
+                '• Reference this avatar when making business decisions about services and positioning'
+            ];
+            
+            recommendations.forEach(rec => {
+                const lines = doc.splitTextToSize(rec, maxWidth);
+                doc.text(lines, 20, yPosition);
+                yPosition += lines.length * 5 + 5;
+            });
+            
+            // Footer
+            doc.setFontSize(10);
+            doc.text('Generated by Interior Design Her - Client Avatar Discovery Tool', 20, 280);
+            doc.text('Visit: interiordesignher.com', 20, 285);
+            
+            // Save the PDF
+            const fileName = `client-avatar-report-${new Date().toISOString().split('T')[0]}.pdf`;
+            doc.save(fileName);
+            
+            // Show rating prompt
+            setTimeout(() => {
+                showRatingPrompt();
+            }, 1000);
+        }
+
+        // Star Rating System
+        function showRatingPrompt() {
+            const ratingDiv = document.createElement('div');
+            ratingDiv.className = 'payment-required'; // Reuse styling
+            ratingDiv.innerHTML = `
+                <h3>⭐ How was your experience?</h3>
+                <p>Please rate your Client Avatar Discovery experience:</p>
+                <div style="margin: 15px 0;">
+                    ${[1,2,3,4,5].map(i => 
+                        `<span onclick="submitRating(${i})" style="font-size: 30px; cursor: pointer; margin: 0 5px;" onmouseover="highlightStars(${i})" onmouseout="resetStars()">⭐</span>`
+                    ).join('')}
+                </div>
+                <p><small>Your feedback helps us improve this tool!</small></p>
+            `;
+            chatContainer.appendChild(ratingDiv);
+        }
+
+        function highlightStars(rating) {
+            // Visual feedback for star hovering (simple implementation)
+            console.log(`Hovering over ${rating} stars`);
+        }
+
+        function resetStars() {
+            // Reset star highlighting
+        }
+
+        function submitRating(rating) {
+            // Store rating
+            localStorage.setItem('avatarRating', rating);
+            
+            // Thank user
+            addMessage(`<strong>Thank you!</strong> You rated your experience ${rating}/5 stars. We appreciate your feedback!`);
+            
+            // Simple analytics tracking (if Google Analytics is available)
+            if (typeof gtag !== 'undefined') {
+                gtag('event', 'avatar_rating', {
+                    'rating': rating,
+                    'tool': 'client_avatar_discovery'
+                });
+            }
+        }
+
+        // Make generatePDF available globally
+        window.generatePDF = generatePDF;
+        window.submitRating = submitRating;
+        window.highlightStars = highlightStars;
+        window.resetStars = resetStars;
+
+        // Show API key warning if not configured
+        if (CLAUDE_API_KEY === 'your-claude-api-key-here') {
+            showError('Please configure your Claude API key in the script.');
+        }
+    </script>
+</body>
+</html>
